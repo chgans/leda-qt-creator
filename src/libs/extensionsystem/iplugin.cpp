@@ -55,12 +55,12 @@
     \section1 Plugin Implementation
     Plugins must provide one implementation of the IPlugin class, located
     in a library that matches the \c name attribute given in their
-    XML description. The IPlugin implementation must be exported and
+    description file. The IPlugin implementation must be exported and
     made known to Qt's plugin system, using the \c Q_PLUGIN_METADATA macro with
-    an IID set to \c "org.qt-project.Qt.QtCreatorPlugin".
+    an IID set to \c "org.libre-eda.leda.plugin".
 
 
-    After the plugins' XML files have been read, and dependencies have been
+    After the plugins' description files have been read, and dependencies have been
     found, the plugin loading is done in three phases:
     \list 1
     \li All plugin libraries are loaded in \e{root-to-leaf} order of the

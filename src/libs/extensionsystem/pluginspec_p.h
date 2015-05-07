@@ -40,7 +40,6 @@
 #include <QRegExp>
 #include <QStringList>
 #include <QVector>
-#include <QXmlStreamReader>
 
 namespace ExtensionSystem {
 

@@ -97,7 +97,7 @@ enum { debugLeaks = 0 };
     \endlist
 
     \section1 Plugins
-    Plugins consist of an XML descriptor file, and of a library that contains a Qt plugin
+    Plugins consist of a descriptor file, and of a library that contains a Qt plugin
     that must derive from the IPlugin class and has an IID of
     \c "org.qt-project.Qt.QtCreatorPlugin".
     The plugin manager is used to set a list of file system directories to search for
@@ -453,7 +453,7 @@ QStringList PluginManager::pluginPaths()
 /*!
     Sets the plugin search paths, i.e. the file system paths where the plugin manager
     looks for plugin descriptions. All given \a paths and their sub directory trees
-    are searched for plugin xml description files.
+    are searched for plugin description files.
 
     \sa pluginPaths()
     \sa loadPlugins()
@@ -539,7 +539,7 @@ QStringList PluginManager::arguments()
 /*!
     List of all plugin specifications that have been found in the plugin search paths.
     This list is valid directly after the setPluginPaths() call.
-    The plugin specifications contain the information from the plugins' xml description files
+    The plugin specifications contain the information from the plugins' description files
     and the current state of the plugins. If a plugin's library has been already successfully loaded,
     the plugin specification has a reference to the created plugin instance as well.
 

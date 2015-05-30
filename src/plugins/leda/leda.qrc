@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/leda">
+        <file>LedaEditor.mimetypes.xml</file>
+    </qresource>
+</RCC>

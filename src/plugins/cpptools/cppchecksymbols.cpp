@@ -423,12 +423,8 @@ Scope *CheckSymbols::enclosingScope() const
                 return funDef->symbol;
 
         } else if (TemplateDeclarationAST *templateDeclaration = ast->asTemplateDeclaration()) {
-            if (DeclarationAST *decl = templateDeclaration->declaration) {
-                if (FunctionDefinitionAST *funDef = decl->asFunctionDefinition()) {
-                    if (funDef->symbol)
-                        return funDef->symbol;
-                }
-            }
+            if (templateDeclaration->symbol)
+                return templateDeclaration->symbol;
 
         } else if (CompoundStatementAST *blockStmt = ast->asCompoundStatement()) {
             if (blockStmt->symbol)
@@ -1300,12 +1296,8 @@ bool CheckSymbols::maybeAddFunction(const QList<LookupItem> &candidates, NameAST
         isConstructor = isConstructorDeclaration(c);
 
         Function *funTy = c->type()->asFunctionType();
-        if (!funTy) {
-            //Try to find a template function
-            if (Template * t = r.type()->asTemplateType())
-                if ((c = t->declaration()))
-                    funTy = c->type()->asFunctionType();
-        }
+        if (!funTy) // Template function has an overridden type
+            funTy = r.type()->asFunctionType();
         if (!funTy)
             continue; // TODO: add diagnostic messages and color call-operators calls too?
 

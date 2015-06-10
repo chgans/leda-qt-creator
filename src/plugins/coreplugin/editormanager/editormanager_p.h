@@ -85,6 +85,7 @@ public:
                                  Id editorId = Id(),
                                  EditorManager::OpenEditorFlags flags = EditorManager::NoFlags,
                                  bool *newEditor = 0);
+    static IEditor *openEditorWith(const QString &fileName, Core::Id editorId);
     static IEditor *duplicateEditor(IEditor *editor);
     static IEditor *activateEditor(EditorView *view, IEditor *editor,
                                    EditorManager::OpenEditorFlags flags = EditorManager::NoFlags);
@@ -106,8 +107,6 @@ public:
 
     static void saveSettings();
     static void readSettings();
-    static void setReloadSetting(IDocument::ReloadSetting behavior);
-    static IDocument::ReloadSetting reloadSetting();
     static void setAutoSaveEnabled(bool enabled);
     static bool autoSaveEnabled();
     static void setAutoSaveInterval(int interval);

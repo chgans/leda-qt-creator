@@ -267,11 +267,11 @@ static inline bool validMode(DebuggerStartMode sm)
 }
 
 // Accessed by RunControlFactory
-DebuggerEngine *createCdbEngine(const DebuggerRunParameters &sp, QString *errorMessage)
+DebuggerEngine *createCdbEngine(const DebuggerRunParameters &rp, QString *errorMessage)
 {
     if (HostOsInfo::isWindowsHost()) {
-        if (validMode(sp.startMode))
-            return new CdbEngine(sp);
+        if (validMode(rp.startMode))
+            return new CdbEngine(rp);
         *errorMessage = QLatin1String("Internal error: Invalid start parameters passed for thee CDB engine.");
     } else {
         *errorMessage = QString::fromLatin1("Unsupported debug mode");
@@ -992,6 +992,8 @@ void CdbEngine::addLocalsOptions(ByteArrayInputStream &str) const
         str << blankSeparator << "-v";
     if (boolSetting(UseDebuggingHelpers))
         str << blankSeparator << "-c";
+    if (boolSetting(SortStructMembers))
+        str << blankSeparator << "-a";
     const QByteArray typeFormats = watchHandler()->typeFormatRequests();
     if (!typeFormats.isEmpty())
         str << blankSeparator << "-T " << typeFormats;
@@ -1471,6 +1473,11 @@ void CdbEngine::updateLocals(bool newFrame)
     watchHandler()->notifyUpdateStarted();
     postExtensionCommand("locals", arguments, 0,
                          [this, newFrame](const CdbResponse &r) { handleLocals(r, newFrame); });
+}
+
+void CdbEngine::updateAll()
+{
+    updateLocals(true);
 }
 
 void CdbEngine::selectThread(ThreadId threadId)

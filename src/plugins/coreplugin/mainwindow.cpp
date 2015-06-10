@@ -237,11 +237,6 @@ void MainWindow::setOverrideColor(const QColor &color)
     m_overrideColor = color;
 }
 
-bool MainWindow::isNewItemDialogRunning() const
-{
-    return !m_newDialog.isNull();
-}
-
 MainWindow::~MainWindow()
 {
     // explicitly delete window support, because that calls methods from ICore that call methods
@@ -492,7 +487,13 @@ void MainWindow::registerDefaultActions()
     cmd = ActionManager::registerAction(m_newAction, Constants::NEW);
     cmd->setDefaultKeySequence(QKeySequence::New);
     mfile->addAction(cmd, Constants::G_FILE_NEW);
-    connect(m_newAction, SIGNAL(triggered()), this, SLOT(newFile()));
+    connect(m_newAction, &QAction::triggered, this, [this]() {
+        ICore::showNewItemDialog(tr("New File or Project", "Title of dialog"),
+                                 IWizardFactory::allWizardFactories(), QString());
+    });
+    connect(ICore::instance(), &ICore::newItemDialogRunningChanged, m_newAction, [this]() {
+        m_newAction->setEnabled(!ICore::isNewItemDialogRunning());
+    });
 
     // Open Action
     icon = QIcon::fromTheme(QLatin1String("document-open"), QIcon(QLatin1String(Constants::ICON_OPENFILE)));
@@ -732,11 +733,6 @@ void MainWindow::registerDefaultActions()
     }
 }
 
-void MainWindow::newFile()
-{
-    showNewItemDialog(tr("New File or Project", "Title of dialog"), IWizardFactory::allWizardFactories(), QString());
-}
-
 void MainWindow::openFile()
 {
     openFiles(EditorManager::getOpenFileNames(), ICore::SwitchMode);
@@ -813,21 +809,6 @@ void MainWindow::setFocusToEditor()
     EditorManagerPrivate::doEscapeKeyFocusMoveMagic();
 }
 
-void MainWindow::showNewItemDialog(const QString &title,
-                                          const QList<IWizardFactory *> &factories,
-                                          const QString &defaultLocation,
-                                          const QVariantMap &extraVariables)
-{
-    QTC_ASSERT(!m_newDialog, return);
-    m_newAction->setEnabled(false);
-    m_newDialog = new NewDialog(this);
-    connect(m_newDialog.data(), SIGNAL(destroyed()), this, SLOT(newItemDialogFinished()));
-    m_newDialog->setWizardFactories(factories, defaultLocation, extraVariables);
-    m_newDialog->setWindowTitle(title);
-    m_newDialog->showDialog();
-    emit newItemDialogRunningChanged();
-}
-
 bool MainWindow::showOptionsDialog(Id page, QWidget *parent)
 {
     emit m_coreImpl->optionsDialogRequested();
@@ -862,7 +843,7 @@ void MainWindow::openFileWith()
         if (isExternal)
             EditorManager::openExternalEditor(fileName, editorId);
         else
-            EditorManager::openEditor(fileName, editorId);
+            EditorManagerPrivate::openEditorWith(fileName, editorId);
     }
 }
 

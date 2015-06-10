@@ -48,7 +48,6 @@
 
 Q_DECLARE_METATYPE(Core::IWizardFactory*)
 
-
 namespace {
 
 const int ICON_SIZE = 22;
@@ -188,6 +187,7 @@ Q_DECLARE_METATYPE(WizardFactoryContainer)
 using namespace Core;
 using namespace Core::Internal;
 
+bool NewDialog::m_isRunning = false;
 QString NewDialog::m_lastCategory = QString();
 
 NewDialog::NewDialog(QWidget *parent) :
@@ -195,6 +195,10 @@ NewDialog::NewDialog(QWidget *parent) :
     m_ui(new Ui::NewDialog),
     m_okButton(0)
 {
+    QTC_CHECK(!m_isRunning);
+
+    m_isRunning = true;
+
     setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
     setWindowFlags(windowFlags());
     setAttribute(Qt::WA_DeleteOnClose);
@@ -220,20 +224,15 @@ NewDialog::NewDialog(QWidget *parent) :
     m_ui->templatesView->setModel(m_filterProxyModel);
     m_ui->templatesView->setIconSize(QSize(ICON_SIZE, ICON_SIZE));
 
-    connect(m_ui->templateCategoryView->selectionModel(),
-            SIGNAL(currentChanged(QModelIndex,QModelIndex)),
-            this, SLOT(currentCategoryChanged(QModelIndex)));
+    connect(m_ui->templateCategoryView->selectionModel(), &QItemSelectionModel::currentChanged,
+            this, &NewDialog::currentCategoryChanged);
 
-    connect(m_ui->templatesView->selectionModel(),
-            SIGNAL(currentChanged(QModelIndex,QModelIndex)),
-            this, SLOT(currentItemChanged(QModelIndex)));
+    connect(m_ui->templatesView->selectionModel(), &QItemSelectionModel::currentChanged,
+            this, &NewDialog::currentItemChanged);
 
-    connect(m_ui->templatesView,
-            SIGNAL(doubleClicked(QModelIndex)),
-            this, SLOT(okButtonClicked()));
-
-    connect(m_okButton, SIGNAL(clicked()), this, SLOT(okButtonClicked()));
-    connect(m_ui->buttonBox, SIGNAL(rejected()), this, SLOT(reject()));
+    connect(m_ui->templatesView, &QListView::doubleClicked, this, &NewDialog::accept);
+    connect(m_ui->buttonBox, &QDialogButtonBox::accepted, this, &NewDialog::accept);
+    connect(m_ui->buttonBox, &QDialogButtonBox::rejected, this, &NewDialog::reject);
 
     connect(m_ui->comboBox, SIGNAL(currentIndexChanged(QString)), this, SLOT(setSelectedPlatform(QString)));
 }
@@ -278,10 +277,8 @@ void NewDialog::setWizardFactories(QList<IWizardFactory *> factories,
         m_ui->comboBox->addItem(tr("%1 Templates").arg(displayNameForPlatform), platform);
     }
 
-    if (!availablePlatforms.isEmpty())
-        m_ui->comboBox->setCurrentIndex(1); //First Platform
-    else
-        m_ui->comboBox->setDisabled(true);
+    m_ui->comboBox->setCurrentIndex(0); // "All templates"
+    m_ui->comboBox->setEnabled(!availablePlatforms.isEmpty());
 
     foreach (IWizardFactory *factory, factories) {
         QStandardItem *kindItem;
@@ -334,6 +331,11 @@ QString NewDialog::selectedPlatform() const
     return m_ui->comboBox->itemData(index).toString();
 }
 
+bool NewDialog::isRunning()
+{
+    return m_isRunning;
+}
+
 bool NewDialog::event(QEvent *event)
 {
     if (event->type() == QEvent::ShortcutOverride) {
@@ -348,6 +350,9 @@ bool NewDialog::event(QEvent *event)
 
 NewDialog::~NewDialog()
 {
+    QTC_CHECK(m_isRunning);
+    m_isRunning = false;
+
     delete m_ui;
 }
 
@@ -443,18 +448,16 @@ void NewDialog::saveState()
         m_lastCategory = currentItem->data(Qt::UserRole).toString();
 }
 
-void NewDialog::okButtonClicked()
+void NewDialog::accept()
 {
-    if (m_ui->templatesView->currentIndex().isValid()) {
-        hide();
-        saveState();
+    saveState();
+    QDialog::accept();
 
+    if (m_ui->templatesView->currentIndex().isValid()) {
         IWizardFactory *wizard = currentWizardFactory();
         QTC_ASSERT(wizard, accept(); return);
         QString path = wizard->runPath(m_defaultLocation);
         wizard->runWizard(path, ICore::dialogParent(), selectedPlatform(), m_extraVariables);
-
-        close();
     }
 }
 

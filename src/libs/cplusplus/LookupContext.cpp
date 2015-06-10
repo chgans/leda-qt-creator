@@ -569,7 +569,7 @@ private:
 
     LookupScopePrivate *nestedType(const Name *name, LookupScopePrivate *origin);
 
-    LookupScopePrivate *findSpecialization(const TemplateNameId *templId,
+    LookupScopePrivate *findSpecialization(const Template *baseTemplate, const TemplateNameId *templId,
                                            const TemplateNameIdTable &specializations,
                                            LookupScopePrivate *origin);
 
@@ -967,11 +967,10 @@ void CreateBindings::lookupInScope(const Name *name, Scope *scope,
             if (const TemplateNameId *instantiation = name->asTemplateNameId()) {
                 if (Template *specialization = s->asTemplate()) {
                     if (const Symbol *decl = specialization->declaration()) {
-                        if (decl->isFunction()) {
+                        if (decl->isFunction() || decl->isDeclaration()) {
                             Clone cloner(_control.data());
                             Subst subst(_control.data());
-                            initializeSubst(cloner, subst, binding, scope,
-                                            specialization, instantiation);
+                            initializeSubst(cloner, subst, binding, specialization, instantiation);
                             Symbol *instantiatedFunctionTemplate =
                                     cloner.symbol(specialization->declaration(), &subst);
                             item.setType(instantiatedFunctionTemplate->type()); // override the type
@@ -1144,9 +1143,29 @@ LookupScope *LookupScopePrivate::lookupType_helper(
     return 0;
 }
 
-static LookupScopePrivate *findSpecializationWithMatchingTemplateArgument(
-        const Name *argumentName, LookupScopePrivate *reference)
+static const NamedType *dereference(const FullySpecifiedType &type)
 {
+    FullySpecifiedType ty = type;
+    forever {
+        if (PointerType *pointer = ty->asPointerType())
+            ty = pointer->elementType();
+        else if (ReferenceType *reference = ty->asReferenceType())
+            ty = reference->elementType();
+        else if (ArrayType *array = ty->asArrayType())
+            ty = array->elementType();
+        else if (const NamedType *namedType = ty->asNamedType())
+            return namedType;
+        else
+            break;
+    }
+    return 0;
+}
+
+static bool findTemplateArgument(const NamedType *namedType, LookupScopePrivate *reference)
+{
+    if (!namedType)
+        return false;
+    const Name *argumentName = namedType->name();
     foreach (Symbol *s, reference->_symbols) {
         if (Class *clazz = s->asClass()) {
             if (Template *templateSpecialization = clazz->enclosingTemplate()) {
@@ -1157,63 +1176,67 @@ static LookupScopePrivate *findSpecializationWithMatchingTemplateArgument(
                             = templateSpecialization->templateParameterAt(i)->asTypenameArgument()) {
                         if (const Name *name = tParam->name()) {
                             if (compareName(name, argumentName))
-                                return reference;
+                                return true;
                         }
                     }
                 }
             }
         }
     }
-    return 0;
+    return false;
+}
+
+static bool matchTypes(const FullySpecifiedType &instantiation,
+                       const FullySpecifiedType &specialization)
+{
+    if (specialization.match(instantiation))
+        return true;
+    if (const NamedType *specName = specialization->asNamedType()) {
+        if (const NamedType *initName = instantiation->asNamedType()) {
+            if (specName->name()->identifier()->match(initName->name()->identifier()))
+                return true;
+        }
+    }
+    return false;
 }
 
 LookupScopePrivate *LookupScopePrivate::findSpecialization(
-        const TemplateNameId *templId, const TemplateNameIdTable &specializations, LookupScopePrivate *origin)
+        const Template *baseTemplate,
+        const TemplateNameId *templId,
+        const TemplateNameIdTable &specializations,
+        LookupScopePrivate *origin)
 {
-    // we go through all specialization and try to find that one with template argument as pointer
+    Clone cloner(_factory->control().data());
     for (TemplateNameIdTable::const_iterator cit = specializations.begin();
          cit != specializations.end(); ++cit) {
         const TemplateNameId *specializationNameId = cit->first;
         const unsigned specializationTemplateArgumentCount
                 = specializationNameId->templateArgumentCount();
-        const unsigned initializationTemplateArgumentCount
-                = templId->templateArgumentCount();
-        // for now it works only when we have the same number of arguments in specialization
-        // and initialization(in future it should be more clever)
-        if (specializationTemplateArgumentCount == initializationTemplateArgumentCount) {
-            for (unsigned i = 0; i < initializationTemplateArgumentCount; ++i) {
-                const FullySpecifiedType &specializationTemplateArgument
-                        = specializationNameId->templateArgumentAt(i);
-                FullySpecifiedType initializationTemplateArgument
-                        = templId->templateArgumentAt(i);
-                TypeResolver typeResolver(*_factory);
-                Scope *scope = 0;
-                typeResolver.resolve(&initializationTemplateArgument, &scope, origin ? origin->q : 0);
-                PointerType *specPointer
-                        = specializationTemplateArgument.type()->asPointerType();
-                // specialization and initialization argument have to be a pointer
-                // additionally type of pointer argument of specialization has to be namedType
-                if (specPointer && initializationTemplateArgument.type()->isPointerType()
-                        && specPointer->elementType().type()->isNamedType()) {
-                    return cit->second;
-                }
-
-                ArrayType *specArray
-                        = specializationTemplateArgument.type()->asArrayType();
-                if (specArray && initializationTemplateArgument.type()->isArrayType()) {
-                    if (const NamedType *argumentNamedType
-                            = specArray->elementType().type()->asNamedType()) {
-                        if (const Name *argumentName = argumentNamedType->name()) {
-                            if (LookupScopePrivate *reference
-                                    = findSpecializationWithMatchingTemplateArgument(
-                                            argumentName, cit->second)) {
-                                return reference;
-                            }
-                        }
-                    }
-                }
+        Subst subst(_factory->control().data());
+        bool match = true;
+        for (unsigned i = 0; i < specializationTemplateArgumentCount && match; ++i) {
+            const FullySpecifiedType &specializationTemplateArgument
+                    = specializationNameId->templateArgumentAt(i);
+            FullySpecifiedType initializationTemplateArgument =
+                    _factory->resolveTemplateArgument(cloner, subst, origin ? origin->q : 0,
+                                                      baseTemplate, templId, i);
+            // specialization and initialization argument have to be a pointer
+            // additionally type of pointer argument of specialization has to be namedType
+            if (findTemplateArgument(dereference(specializationTemplateArgument), cit->second)) {
+                if (specializationTemplateArgument->isPointerType())
+                    match = initializationTemplateArgument->isPointerType();
+                else if (specializationTemplateArgument->isReferenceType())
+                    match = initializationTemplateArgument->isReferenceType();
+                else if (specializationTemplateArgument->isArrayType())
+                    match = initializationTemplateArgument->isArrayType();
+                // Do not try exact match (typename T != class T {};)
+            } else {
+                // Real type specialization
+                match = matchTypes(initializationTemplateArgument, specializationTemplateArgument);
             }
         }
+        if (match)
+            return cit->second;
     }
 
     return 0;
@@ -1314,10 +1337,23 @@ LookupScopePrivate *LookupScopePrivate::nestedType(const Name *name, LookupScope
                 // we found full specialization
                 reference = cit->second;
             } else {
-                LookupScopePrivate *specializationWithPointer
-                        = findSpecialization(templId, specializations, origin);
-                if (specializationWithPointer)
-                    reference = specializationWithPointer;
+                Template *baseTemplate = 0;
+                foreach (Symbol *s, reference->_symbols) {
+                    if (Class *clazz = s->asClass())
+                        baseTemplate = clazz->enclosingTemplate();
+                    else if (ForwardClassDeclaration *forward = s->asForwardClassDeclaration())
+                        baseTemplate = forward->enclosingTemplate();
+                    if (baseTemplate)
+                        break;
+                }
+                if (LookupScopePrivate *specialization =
+                        findSpecialization(baseTemplate, templId, specializations, origin)) {
+                    reference = specialization;
+                    if (Q_UNLIKELY(debug)) {
+                        Overview oo;
+                        qDebug() << "picked specialization" << oo(specialization->_name);
+                    }
+                }
             }
             // let's instantiation be instantiation
             nonConstTemplId->setIsSpecialization(false);
@@ -1379,7 +1415,7 @@ LookupScopePrivate *LookupScopePrivate::nestedType(const Name *name, LookupScope
             Subst subst(_control.data());
             if (_factory->expandTemplates()) {
                 Clone cloner(_control.data());
-                _factory->initializeSubst(cloner, subst, origin ? origin->q : 0, 0,
+                _factory->initializeSubst(cloner, subst, origin ? origin->q : 0,
                                           templateSpecialization, templId);
                 Instantiator instantiator(cloner, subst);
                 instantiator.instantiate(reference, instantiation, true);
@@ -1641,7 +1677,7 @@ void LookupScopePrivate::addUsing(LookupScope *u)
 
 void LookupScopePrivate::addNestedType(const Name *alias, LookupScope *e)
 {
-    _nestedScopes[alias] = e ? e->d : 0;
+    _nestedScopes[alias] = e->d;
 }
 
 LookupScope *LookupScopePrivate::findOrCreateType(
@@ -2058,41 +2094,50 @@ bool CreateBindings::visit(ObjCMethod *)
     return false;
 }
 
+FullySpecifiedType CreateBindings::resolveTemplateArgument(Clone &cloner,
+                                                           Subst &subst,
+                                                           LookupScope *origin,
+                                                           const Template *specialization,
+                                                           const TemplateNameId *instantiation,
+                                                           unsigned index)
+{
+    FullySpecifiedType ty;
+
+    const TypenameArgument *tParam
+            = specialization->templateParameterAt(index)->asTypenameArgument();
+    if (!tParam)
+        return ty;
+
+    if (index < instantiation->templateArgumentCount())
+        ty = instantiation->templateArgumentAt(index);
+    else
+        ty = cloner.type(tParam->type(), &subst);
+
+    TypeResolver typeResolver(*this);
+    Scope *resolveScope = specialization->enclosingScope();
+    typeResolver.resolve(&ty, &resolveScope, origin);
+    const TemplateNameId *templSpecId = specialization->name()->asTemplateNameId();
+    const unsigned templSpecArgumentCount = templSpecId ? templSpecId->templateArgumentCount() : 0;
+    if (index < templSpecArgumentCount && templSpecId->templateArgumentAt(index)->isPointerType()) {
+        if (PointerType *pointerType = ty->asPointerType())
+            ty = pointerType->elementType();
+    }
+
+    if (const Name *name = tParam->name())
+        subst.bind(cloner.name(name, &subst), ty);
+    return ty;
+}
+
 void CreateBindings::initializeSubst(Clone &cloner,
                                      Subst &subst,
                                      LookupScope *origin,
-                                     Scope *scope,
-                                     Template *specialization,
+                                     const Template *specialization,
                                      const TemplateNameId *instantiation)
 {
-    const unsigned argumentCountOfInitialization = instantiation->templateArgumentCount();
     const unsigned argumentCountOfSpecialization = specialization->templateParameterCount();
 
-    const TemplateNameId *templSpecId = specialization->name()->asTemplateNameId();
-    const unsigned templSpecArgumentCount = templSpecId ? templSpecId->templateArgumentCount() : 0;
-    for (unsigned i = 0; i < argumentCountOfSpecialization; ++i) {
-        const TypenameArgument *tParam
-                = specialization->templateParameterAt(i)->asTypenameArgument();
-        if (!tParam)
-            continue;
-        const Name *name = tParam->name();
-        if (!name)
-            continue;
-
-        FullySpecifiedType ty = (i < argumentCountOfInitialization) ?
-                    instantiation->templateArgumentAt(i):
-                    cloner.type(tParam->type(), &subst);
-
-        TypeResolver typeResolver(*this);
-        Scope *resolveScope = scope;
-        typeResolver.resolve(&ty, &resolveScope, origin);
-        if (i < templSpecArgumentCount && templSpecId->templateArgumentAt(i)->isPointerType()) {
-            if (PointerType *pointerType = ty->asPointerType())
-                ty = pointerType->elementType();
-        }
-
-        subst.bind(cloner.name(name, &subst), ty);
-    }
+    for (unsigned i = 0; i < argumentCountOfSpecialization; ++i)
+        resolveTemplateArgument(cloner, subst, origin, specialization, instantiation, i);
 }
 
 } // namespace CPlusPlus

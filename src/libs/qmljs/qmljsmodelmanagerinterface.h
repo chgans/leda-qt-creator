@@ -78,7 +78,7 @@ public:
             , tryQmlDump(false), qmlDumpHasRelocatableFlag(true)
         { }
 
-        operator bool() const
+        explicit operator bool() const
         { return ! project.isNull(); }
 
         bool isValid() const
@@ -143,7 +143,7 @@ public:
 
 public:
     ModelManagerInterface(QObject *parent = 0);
-    virtual ~ModelManagerInterface();
+    ~ModelManagerInterface() override;
 
     static Dialect guessLanguageOfFile(const QString &fileName);
     static QStringList globPatternsForLanguages(const QList<Dialect> languages);

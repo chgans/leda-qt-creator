@@ -57,18 +57,18 @@ public:
     Settings settings();
 
 private slots:
-    void addButtonClicked();
-    void editButtonClicked();
-    void removeButtonClicked();
-    void resetButtonClicked();
-    void setButtonsEnabled();
-    void itemDoubleClicked(QListWidgetItem *item);
+    void addKeywordButtonClicked();
+    void editKeywordButtonClicked();
+    void removeKeywordButtonClicked();
+    void resetKeywordsButtonClicked();
+    void setKeywordsButtonsEnabled();
+    void keywordDoubleClicked(QListWidgetItem *item);
 
 private:
     void uiFromSettings(const Settings &settings);
     Settings settingsFromUi();
     void addToKeywordsList(const Keyword &keyword);
-    void editItem(QListWidgetItem *item);
+    void editKeyword(QListWidgetItem *item);
     QSet<QString> keywordNames();
 
     Ui::OptionsDialog *ui;

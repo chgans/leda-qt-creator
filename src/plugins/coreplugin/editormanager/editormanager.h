@@ -32,6 +32,7 @@
 #define EDITORMANAGER_H
 
 #include "../core_global.h"
+#include "../idocument.h"
 
 #include "documentmodel.h"
 
@@ -169,6 +170,11 @@ public:
     static void addSaveAndCloseEditorActions(QMenu *contextMenu, DocumentModel::Entry *entry,
                                              IEditor *editor = 0);
     static void addNativeDirAndOpenWithActions(QMenu *contextMenu, DocumentModel::Entry *entry);
+    static void populateOpenWithMenu(QMenu *menu, const QString &fileName);
+
+public: // for tests
+    static IDocument::ReloadSetting reloadSetting();
+    static void setReloadSetting(IDocument::ReloadSetting behavior);
 
 signals:
     void currentEditorChanged(Core::IEditor *editor);

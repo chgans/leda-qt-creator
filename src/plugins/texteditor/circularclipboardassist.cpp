@@ -63,7 +63,7 @@ public:
         setText(text);
     }
 
-    void apply(TextEditorWidget *editorWidget, int /*basePosition*/) const Q_DECL_OVERRIDE
+    void apply(TextEditorWidget *editorWidget, int /*basePosition*/) const override
     {
 
         //Move to last in circular clipboard
@@ -87,7 +87,7 @@ private:
 class ClipboardAssistProcessor: public IAssistProcessor
 {
 public:
-    IAssistProposal *perform(const AssistInterface *interface) Q_DECL_OVERRIDE
+    IAssistProposal *perform(const AssistInterface *interface) override
     {
         if (!interface)
             return 0;
@@ -108,9 +108,9 @@ public:
     }
 };
 
-bool ClipboardAssistProvider::isAsynchronous() const
+IAssistProvider::RunType ClipboardAssistProvider::runType() const
 {
-    return false;
+    return Synchronous;
 }
 
 bool ClipboardAssistProvider::supportsEditor(Core::Id /*editorId*/) const

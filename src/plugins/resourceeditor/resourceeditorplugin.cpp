@@ -37,7 +37,6 @@
 
 #include <coreplugin/icore.h>
 #include <coreplugin/coreconstants.h>
-#include <coreplugin/documentmanager.h>
 #include <coreplugin/id.h>
 #include <coreplugin/actionmanager/actioncontainer.h>
 #include <coreplugin/actionmanager/actionmanager.h>
@@ -166,6 +165,11 @@ bool ResourceEditorPlugin::initialize(const QStringList &arguments, QString *err
     folderContextMenu->addAction(command, ProjectExplorer::Constants::G_FOLDER_FILES);
     connect(m_removePrefix, SIGNAL(triggered()), this, SLOT(removePrefixContextMenu()));
 
+    m_removeNonExisting = new QAction(tr("Remove Missing Files"), this);
+    command = Core::ActionManager::registerAction(m_removeNonExisting, Constants::C_REMOVE_NON_EXISTING, projectTreeContext);
+    folderContextMenu->addAction(command, ProjectExplorer::Constants::G_FOLDER_FILES);
+    connect(m_removeNonExisting, &QAction::triggered, this, &ResourceEditorPlugin::removeNonExisting);
+
     m_renameResourceFile = new QAction(tr("Rename..."), this);
     command = Core::ActionManager::registerAction(m_renameResourceFile, Constants::C_RENAME_FILE, projectTreeContext);
     folderContextMenu->addAction(command, ProjectExplorer::Constants::G_FOLDER_FILES);
@@ -185,8 +189,6 @@ bool ResourceEditorPlugin::initialize(const QStringList &arguments, QString *err
     folderContextMenu->menu()->insertMenu(
                 folderContextMenu->insertLocation(ProjectExplorer::Constants::G_FOLDER_FILES),
                 m_openWithMenu);
-    connect(m_openWithMenu, &QMenu::triggered,
-            Core::DocumentManager::instance(), &Core::DocumentManager::executeOpenWithMenuAction);
 
     m_copyPath = new Utils::ParameterAction(QString(), tr("Copy path \"%1\""), Utils::ParameterAction::AlwaysEnabled, this);
     command = Core::ActionManager::registerAction(m_copyPath, Constants::C_COPY_PATH, projectTreeContext);
@@ -203,6 +205,7 @@ bool ResourceEditorPlugin::initialize(const QStringList &arguments, QString *err
     m_addPrefix->setEnabled(false);
     m_removePrefix->setEnabled(false);
     m_renamePrefix->setEnabled(false);
+    m_removeNonExisting->setEnabled(false);
     m_renameResourceFile->setEnabled(false);
     m_removeResourceFile->setEnabled(false);
 
@@ -253,6 +256,12 @@ void ResourceEditorPlugin::removePrefixContextMenu()
         ResourceTopLevelNode *rn = rfn->resourceNode();
         rn->removePrefix(rfn->prefix(), rfn->lang());
     }
+}
+
+void ResourceEditorPlugin::removeNonExisting()
+{
+    ResourceTopLevelNode *topLevel = static_cast<ResourceTopLevelNode *>(ProjectTree::currentNode());
+    topLevel->removeNonExistingFiles();
 }
 
 void ResourceEditorPlugin::renameFileContextMenu()
@@ -332,8 +341,11 @@ void ResourceEditorPlugin::updateContextActions(Node *node, Project *)
     m_renamePrefix->setEnabled(isResourceFolder);
     m_renamePrefix->setVisible(isResourceFolder);
 
+    m_removeNonExisting->setEnabled(isResourceNode);
+    m_removeNonExisting->setVisible(isResourceNode);
+
     if (isResourceNode)
-        Core::DocumentManager::populateOpenWithMenu(m_openWithMenu, node->path().toString());
+        Core::EditorManager::populateOpenWithMenu(m_openWithMenu, node->path().toString());
     else
         m_openWithMenu->clear();
     m_openWithMenu->menuAction()->setVisible(!m_openWithMenu->actions().isEmpty());

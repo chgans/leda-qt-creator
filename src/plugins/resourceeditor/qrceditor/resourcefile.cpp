@@ -33,6 +33,7 @@
 #include <coreplugin/fileiconprovider.h>
 #include <coreplugin/fileutils.h>
 #include <coreplugin/icore.h>
+#include <coreplugin/removefiledialog.h>
 #include <coreplugin/vcsmanager.h>
 #include <utils/fileutils.h>
 
@@ -653,6 +654,25 @@ QString ResourceModel::errorMessage() const
     return m_resource_file.errorMessage();
 }
 
+QList<QModelIndex> ResourceModel::nonExistingFiles() const
+{
+    QList<QModelIndex> files;
+    QFileInfo fi;
+    int prefixCount = rowCount(QModelIndex());
+    for (int i = 0; i < prefixCount; ++i) {
+        QModelIndex prefix = index(i, 0, QModelIndex());
+        int fileCount = rowCount(prefix);
+        for (int j = 0; j < fileCount; ++j) {
+            QModelIndex fileIndex = index(j, 0, prefix);
+            QString fileName = file(fileIndex);
+            fi.setFile(fileName);
+            if (!fi.exists())
+                files << fileIndex;
+        }
+    }
+    return files;
+}
+
 Qt::ItemFlags ResourceModel::flags(const QModelIndex &index) const
 {
     Qt::ItemFlags f = QAbstractItemModel::flags(index);
@@ -1103,4 +1123,108 @@ QMimeData *ResourceModel::mimeData(const QModelIndexList &indexes) const
     QMimeData *rc = new QMimeData;
     rc->setText(doc.toString());
     return rc;
+}
+
+
+/*!
+    \class FileEntryBackup
+
+    Backups a file node.
+*/
+class FileEntryBackup : public EntryBackup
+{
+private:
+    int m_fileIndex;
+    QString m_alias;
+
+public:
+    FileEntryBackup(ResourceModel &model, int prefixIndex, int fileIndex,
+            const QString &fileName, const QString &alias)
+            : EntryBackup(model, prefixIndex, fileName), m_fileIndex(fileIndex),
+            m_alias(alias) { }
+    void restore() const;
+};
+
+void FileEntryBackup::restore() const
+{
+    m_model->insertFile(m_prefixIndex, m_fileIndex, m_name, m_alias);
+}
+
+/*!
+    \class PrefixEntryBackup
+
+    Backups a prefix node including children.
+*/
+class PrefixEntryBackup : public EntryBackup
+{
+private:
+    QString m_language;
+    QList<FileEntryBackup> m_files;
+
+public:
+    PrefixEntryBackup(ResourceModel &model, int prefixIndex, const QString &prefix,
+            const QString &language, const QList<FileEntryBackup> &files)
+            : EntryBackup(model, prefixIndex, prefix), m_language(language), m_files(files) { }
+    void restore() const;
+};
+
+void PrefixEntryBackup::restore() const
+{
+    m_model->insertPrefix(m_prefixIndex, m_name, m_language);
+    foreach (const FileEntryBackup &entry, m_files) {
+        entry.restore();
+    }
+}
+
+RelativeResourceModel::RelativeResourceModel(QObject *parent)  :
+    ResourceModel(parent),
+    m_resourceDragEnabled(false)
+{
+}
+
+Qt::ItemFlags RelativeResourceModel::flags(const QModelIndex &index) const
+{
+    Qt::ItemFlags rc = ResourceModel::flags(index);
+    if ((rc & Qt::ItemIsEnabled) && m_resourceDragEnabled)
+        rc |= Qt::ItemIsDragEnabled;
+    return rc;
+}
+
+EntryBackup * RelativeResourceModel::removeEntry(const QModelIndex &index)
+{
+    const QModelIndex prefixIndex = this->prefixIndex(index);
+    const bool isPrefixNode = (prefixIndex == index);
+
+    // Create backup, remove, return backup
+    if (isPrefixNode) {
+        QString dummy;
+        QString prefixBackup;
+        getItem(index, prefixBackup, dummy);
+        const QString languageBackup = lang(index);
+        const int childCount = rowCount(index);
+        QList<FileEntryBackup> filesBackup;
+        for (int i = 0; i < childCount; i++) {
+            const QModelIndex childIndex = this->index(i, 0, index);
+            const QString fileNameBackup = file(childIndex);
+            const QString aliasBackup = alias(childIndex);
+            FileEntryBackup entry(*this, index.row(), i, fileNameBackup, aliasBackup);
+            filesBackup << entry;
+        }
+        deleteItem(index);
+        return new PrefixEntryBackup(*this, index.row(), prefixBackup, languageBackup, filesBackup);
+    } else {
+        const QString fileNameBackup = file(index);
+        const QString aliasBackup = alias(index);
+        if (!QFile::exists(fileNameBackup)) {
+            deleteItem(index);
+            return new FileEntryBackup(*this, prefixIndex.row(), index.row(), fileNameBackup, aliasBackup);
+        }
+        Core::RemoveFileDialog removeFileDialog(fileNameBackup, Core::ICore::mainWindow());
+        if (removeFileDialog.exec() == QDialog::Accepted) {
+            deleteItem(index);
+            Core::FileUtils::removeFile(fileNameBackup, removeFileDialog.isDeleteFileChecked());
+            return new FileEntryBackup(*this, prefixIndex.row(), index.row(), fileNameBackup, aliasBackup);
+        }
+        return 0;
+    }
 }

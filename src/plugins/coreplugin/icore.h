@@ -59,6 +59,8 @@ class CORE_EXPORT ICore : public QObject
     Q_OBJECT
 
     friend class Internal::MainWindow;
+    friend class IWizardFactory;
+
     explicit ICore(Internal::MainWindow *mw);
     ~ICore();
 
@@ -136,6 +138,11 @@ signals:
     void contextAboutToChange(const QList<Core::IContext *> &context);
     void contextChanged(const QList<Core::IContext *> &context, const Core::Context &additionalContexts);
     void themeChanged();
+
+private:
+    static void validateNewDialogIsRunning();
+    static void newItemDialogOpened();
+    static void newItemDialogClosed();
 };
 
 } // namespace Core

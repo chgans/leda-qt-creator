@@ -150,8 +150,13 @@ public:
     /// \internal
     LookupScope *allocLookupScope(LookupScope *parent, const Name *name);
 
-    void initializeSubst(Clone &cloner, Subst &subst, LookupScope *origin, Scope *scope,
-                         Template *specialization, const TemplateNameId *instantiation);
+    FullySpecifiedType resolveTemplateArgument(Clone &cloner, Subst &subst,
+                                               LookupScope *origin,
+                                               const Template *specialization,
+                                               const TemplateNameId *instantiation,
+                                               unsigned index);
+    void initializeSubst(Clone &cloner, Subst &subst, LookupScope *origin,
+                         const Template *specialization, const TemplateNameId *instantiation);
 
 protected:
     using SymbolVisitor::visit;

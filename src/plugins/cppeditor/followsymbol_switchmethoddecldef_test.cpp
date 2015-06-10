@@ -132,7 +132,7 @@ public:
     // Invoke the processor already here to calculate the proposals. Return false in order to
     // indicate that configure failed, so the actual code assist invocation leading to a pop-up
     // will not happen.
-    bool configure(const VirtualFunctionAssistProvider::Parameters &params) Q_DECL_OVERRIDE
+    bool configure(const VirtualFunctionAssistProvider::Parameters &params) override
     {
         VirtualFunctionAssistProvider::configure(params);
 
@@ -966,6 +966,11 @@ void CppEditorPlugin::test_FollowSymbolUnderCursor_data()
     QTest::newRow("trailingReturnType") << _(
         "struct $Foo {};\n"
         "auto foo() -> @Foo {}\n"
+    );
+
+    QTest::newRow("template_alias") << _(
+        "template<class $T>\n"
+        "using Foo = Bar<@T>;\n"
     );
 }
 

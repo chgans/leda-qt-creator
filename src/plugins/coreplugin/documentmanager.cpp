@@ -118,14 +118,6 @@ static bool saveModifiedFilesHelper(const QList<IDocument *> &documents,
 
 namespace Internal {
 
-struct OpenWithEntry
-{
-    OpenWithEntry() : editorFactory(0), externalEditor(0) {}
-    IEditorFactory *editorFactory;
-    IExternalEditor *externalEditor;
-    QString fileName;
-};
-
 struct FileStateItem
 {
     QDateTime modified;
@@ -209,8 +201,6 @@ DocumentManagerPrivate::DocumentManagerPrivate() :
 
 } // namespace Internal
 } // namespace Core
-
-Q_DECLARE_METATYPE(Core::Internal::OpenWithEntry)
 
 namespace Core {
 
@@ -925,7 +915,7 @@ void DocumentManager::checkForReload()
 
     d->m_blockActivated = true;
 
-    IDocument::ReloadSetting defaultBehavior = EditorManagerPrivate::reloadSetting();
+    IDocument::ReloadSetting defaultBehavior = EditorManager::reloadSetting();
     ReloadPromptAnswer previousReloadAnswer = ReloadCurrent;
     FileDeletedPromptAnswer previousDeletedAnswer = FileDeletedSave;
 
@@ -1383,93 +1373,6 @@ void DocumentManager::setFileDialogLastVisitedDirectory(const QString &directory
 void DocumentManager::notifyFilesChangedInternally(const QStringList &files)
 {
     emit m_instance->filesChangedInternally(files);
-}
-
-void DocumentManager::populateOpenWithMenu(QMenu *menu, const QString &fileName)
-{
-    typedef QList<IEditorFactory*> EditorFactoryList;
-    typedef QList<IExternalEditor*> ExternalEditorList;
-
-    menu->clear();
-
-    bool anyMatches = false;
-
-    Utils::MimeDatabase mdb;
-    const Utils::MimeType mt = mdb.mimeTypeForFile(fileName);
-    if (mt.isValid()) {
-        const EditorFactoryList factories = EditorManager::editorFactories(mt, false);
-        const ExternalEditorList externalEditors = EditorManager::externalEditors(mt, false);
-        anyMatches = !factories.empty() || !externalEditors.empty();
-        if (anyMatches) {
-            // Add all suitable editors
-            foreach (IEditorFactory *editorFactory, factories) {
-                // Add action to open with this very editor factory
-                QString const actionTitle = editorFactory->displayName();
-                QAction * const action = menu->addAction(actionTitle);
-                OpenWithEntry entry;
-                entry.editorFactory = editorFactory;
-                entry.fileName = fileName;
-                action->setData(qVariantFromValue(entry));
-            }
-            // Add all suitable external editors
-            foreach (IExternalEditor *externalEditor, externalEditors) {
-                QAction * const action = menu->addAction(externalEditor->displayName());
-                OpenWithEntry entry;
-                entry.externalEditor = externalEditor;
-                entry.fileName = fileName;
-                action->setData(qVariantFromValue(entry));
-            }
-        }
-    }
-    menu->setEnabled(anyMatches);
-}
-
-void DocumentManager::executeOpenWithMenuAction(QAction *action)
-{
-    QTC_ASSERT(action, return);
-    const QVariant data = action->data();
-    OpenWithEntry entry = qvariant_cast<OpenWithEntry>(data);
-    if (entry.editorFactory) {
-        // close any open editors that have this file open
-        // remember the views to open new editors in there
-        QList<EditorView *> views;
-        QList<IEditor *> editorsOpenForFile
-                = DocumentModel::editorsForFilePath(entry.fileName);
-        foreach (IEditor *openEditor, editorsOpenForFile) {
-            EditorView *view = EditorManagerPrivate::viewForEditor(openEditor);
-            if (view && view->currentEditor() == openEditor) // visible
-                views.append(view);
-        }
-        if (!EditorManager::closeEditors(editorsOpenForFile)) // don't open if cancel was pressed
-            return;
-
-        if (views.isEmpty()) {
-            EditorManager::openEditor(entry.fileName, entry.editorFactory->id());
-        } else {
-            if (EditorView *currentView = EditorManagerPrivate::currentEditorView()) {
-                if (views.removeOne(currentView))
-                    views.prepend(currentView); // open editor in current view first
-            }
-            EditorManager::OpenEditorFlags flags;
-            foreach (EditorView *view, views) {
-                IEditor *editor =
-                        EditorManagerPrivate::openEditor(view, entry.fileName,
-                                                         entry.editorFactory->id(), flags);
-                // Do not change the current editor after opening the first one. That
-                // * prevents multiple updates of focus etc which are not necessary
-                // * lets us control which editor is made current by putting the current editor view
-                //   to the front (if that was in the list in the first place
-                flags |= EditorManager::DoNotChangeCurrentEditor;
-                // do not try to open more editors if this one failed, or editor type does not
-                // support duplication anyhow
-                if (!editor || !editor->duplicateSupported())
-                    break;
-            }
-        }
-        return;
-    }
-    if (entry.externalEditor)
-        EditorManager::openExternalEditor(entry.fileName, entry.externalEditor->id());
 }
 
 bool DocumentManager::eventFilter(QObject *obj, QEvent *e)

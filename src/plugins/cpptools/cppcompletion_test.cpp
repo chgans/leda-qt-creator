@@ -1306,21 +1306,28 @@ void CppToolsPlugin::test_completion_data()
             << QLatin1String("Template1"));
 
     QTest::newRow("template_specialization_with_pointer") << _(
-            "template <typename T>\n"
-            "struct Template\n"
+            "template <typename T> struct Temp { T variable; };\n"
+            "template <typename T> struct Temp<T *> { T *pointer; };\n"
+            "void func()\n"
             "{\n"
-            "    T variable;\n"
-            "};\n"
-            "template <typename T>\n"
-            "struct Template<T *>\n"
-            "{\n"
-            "    T *pointer;\n"
-            "};\n"
-            "Template<int*> templ;\n"
-            "@\n"
+            "    Temp<int*> templ;\n"
+            "    @\n"
+            "}"
         ) << _("templ.") << (QStringList()
-            << QLatin1String("Template")
+            << QLatin1String("Temp")
             << QLatin1String("pointer"));
+
+    QTest::newRow("template_specialization_with_reference") << _(
+            "template <typename T> struct Temp { T variable; };\n"
+            "template <typename T> struct Temp<T &> { T reference; };\n"
+            "void func()\n"
+            "{\n"
+            "    Temp<int&> templ;\n"
+            "    @\n"
+            "}"
+        ) << _("templ.") << (QStringList()
+            << QLatin1String("Temp")
+            << QLatin1String("reference"));
 
     QTest::newRow("typedef_using_templates1") << _(
             "namespace NS1\n"
@@ -2623,6 +2630,78 @@ void CppToolsPlugin::test_completion_data()
     ) << _("s.") << (QStringList()
         << QLatin1String("S"));
 
+    QTest::newRow("partial_specialization") << _(
+            "struct b {};\n"
+            "template<class X, class Y> struct s { float f; };\n"
+            "template<class X> struct s<X, b> { int i; };\n"
+            "\n"
+            "void f()\n"
+            "{\n"
+            "    s<int, b> var;\n"
+            "    @\n"
+            "}\n"
+    ) << _("var.") << (QStringList()
+        << QLatin1String("i")
+        << QLatin1String("s"));
+
+    QTest::newRow("partial_specialization_with_pointer") << _(
+            "struct b {};\n"
+            "struct a : b {};\n"
+            "template<class X, class Y> struct s { float f; };\n"
+            "template<class X> struct s<X, b*> { int i; };\n"
+            "template<class X> struct s<X, a*> { char j; };\n"
+            "\n"
+            "void f()\n"
+            "{\n"
+            "    s<int, a*> var;\n"
+            "    @\n"
+            "}\n"
+    ) << _("var.") << (QStringList()
+        << QLatin1String("j")
+        << QLatin1String("s"));
+
+    QTest::newRow("partial_specialization_templated_argument") << _(
+            "template<class T> struct t {};\n"
+            "\n"
+            "template<class> struct s { float f; };\n"
+            "template<class X> struct s<t<X>> { int i; };\n"
+            "\n"
+            "void f()\n"
+            "{\n"
+            "    s<t<char>> var;\n"
+            "    @\n"
+            "}\n"
+    ) << _("var.") << (QStringList()
+        << QLatin1String("i")
+        << QLatin1String("s"));
+
+    QTest::newRow("specialization_multiple_arguments") << _(
+            "class false_type {};\n"
+            "class true_type {};\n"
+            "template<class T1, class T2> class and_type { false_type f; };\n"
+            "template<> class and_type<true_type, true_type> { true_type t; };\n"
+            "void func()\n"
+            "{\n"
+            "    and_type<true_type, false_type> a;\n"
+            "    @;\n"
+            "}\n"
+     ) << _("a.") << (QStringList()
+        << QLatin1String("f")
+        << QLatin1String("and_type"));
+
+    QTest::newRow("specialization_with_default_value") << _(
+            "class Foo {};\n"
+            "template<class T1 = Foo> class Temp;\n"
+            "template<> class Temp<Foo> { int var; };\n"
+            "void func()\n"
+            "{\n"
+            "    Temp<> t;\n"
+            "    @\n"
+            "}\n"
+     ) << _("t.") << (QStringList()
+        << QLatin1String("var")
+        << QLatin1String("Temp"));
+
     QTest::newRow("auto_declaration_in_if_condition") << _(
             "struct Foo { int bar; };\n"
             "void fun() {\n"
@@ -2917,6 +2996,87 @@ void CppToolsPlugin::test_completion_data()
         << QLatin1String("Foo")
         << QLatin1String("bar"));
 
+    QTest::newRow("template_using_instantiation") << _(
+            "template<typename _Tp>\n"
+            "using T = _Tp;\n"
+            "\n"
+            "struct Foo { int bar; };\n"
+            "\n"
+            "void func()\n"
+            "{\n"
+            "    T<Foo> p;\n"
+            "    @\n"
+            "}\n"
+    ) << _("p.") << (QStringList()
+        << QLatin1String("Foo")
+        << QLatin1String("bar"));
+
+    QTest::newRow("nested_template_using_instantiation") << _(
+            "struct Parent {\n"
+            "    template<typename _Tp>\n"
+            "    using T = _Tp;\n"
+            "};\n"
+            "\n"
+            "struct Foo { int bar; };\n"
+            "\n"
+            "void func()\n"
+            "{\n"
+            "    Parent::T<Foo> p;\n"
+            "    @;\n"
+            "}\n"
+     ) << _("p.") << (QStringList()
+        << QLatin1String("Foo")
+        << QLatin1String("bar"));
+
+    QTest::newRow("nested_template_using_instantiation_in_template_class") << _(
+            "template<typename ParentT>\n"
+            "struct Parent {\n"
+            "    template<typename _Tp>\n"
+            "    using T = _Tp;\n"
+            "};\n"
+            "\n"
+            "struct Foo { int bar; };\n"
+            "\n"
+            "void func()\n"
+            "{\n"
+            "    Parent<Foo>::T<Foo> p;\n"
+            "    @;\n"
+            "}\n"
+     ) << _("p.") << (QStringList()
+        << QLatin1String("Foo")
+        << QLatin1String("bar"));
+
+    QTest::newRow("recursive_nested_template_using_instantiation") << _(
+            "struct Foo { int bar; };\n"
+            "\n"
+            "struct A { typedef Foo value_type; };\n"
+            "\n"
+            "template<typename T>\n"
+            "struct Traits\n"
+            "{\n"
+            "    typedef Foo value_type;\n"
+            "\n"
+            "    template<typename _Tp>\n"
+            "    using U = T;\n"
+            "};\n"
+            "\n"
+            "template<typename T>\n"
+            "struct Temp\n"
+            "{\n"
+            "    typedef Traits<T> TraitsT;\n"
+            "    typedef typename T::value_type value_type;\n"
+            "    typedef typename TraitsT::template U<Foo> rebind;\n"
+            "};\n"
+            "\n"
+            "void func()\n"
+            "{\n"
+            "    typename Temp<typename Temp<A>::rebind>::value_type p;\n"
+            "    @\n"
+            "}\n"
+    ) << _("p.") << (QStringList()
+        << QLatin1String("Foo")
+        << QLatin1String("bar"));
+
     QTest::newRow("qualified_name_in_nested_type") << _(
             "template<typename _Tp>\n"
             "struct Temp {\n"
@@ -2979,6 +3139,21 @@ void CppToolsPlugin::test_completion_data()
             "void fun()\n"
             "{\n"
             "    Temp<Foo>::Nested::type s;\n"
+            "    @\n"
+            "}\n"
+    ) << _("s.") << (QStringList()
+            << QLatin1String("Foo")
+            << QLatin1String("bar"));
+
+    QTest::newRow("typedefed_decltype_of_template_function") << _(
+            "template<typename T>\n"
+            "static T f();\n"
+            "\n"
+            "struct Foo { int bar; };\n"
+            "\n"
+            "void fun()\n"
+            "{\n"
+            "    decltype(f<Foo>()) s;\n"
             "    @\n"
             "}\n"
     ) << _("s.") << (QStringList()

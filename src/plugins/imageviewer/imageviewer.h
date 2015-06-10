@@ -53,11 +53,13 @@ class ImageViewer : public Core::IEditor
 
 public:
     explicit ImageViewer(QWidget *parent = 0);
-    ~ImageViewer();
+    ~ImageViewer() override;
 
-    bool open(QString *errorString, const QString &fileName, const QString &realFileName);
-    Core::IDocument *document();
-    QWidget *toolBar();
+    bool open(QString *errorString, const QString &fileName, const QString &realFileName) override;
+    Core::IDocument *document() override;
+    QWidget *toolBar() override;
+
+    IEditor *duplicate() override;
 
 public slots:
     void imageSizeUpdated(const QSize &size);
@@ -75,11 +77,10 @@ private slots:
     void playToggled();
 
 private:
+    ImageViewer(const QSharedPointer<ImageViewerFile> &document, QWidget *parent = 0);
+    void ctor();
+    void updatePauseAction();
 
-    bool updateButtonIconByTheme(QAbstractButton *button, const QString &name);
-    void setPaused(bool paused);
-
-private:
     struct ImageViewerPrivate *d;
 };
 

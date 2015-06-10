@@ -51,13 +51,13 @@ class SettingsPage : public Core::IOptionsPage
 public:
     explicit SettingsPage(QDesignerOptionsPageInterface *designerPage);
 
-    QWidget *widget();
-    void apply();
-    void finish();
+    QWidget *widget() override;
+    void apply() override;
+    void finish() override;
 
 private:
     QDesignerOptionsPageInterface *m_designerPage;
-    bool m_initialized;
+    bool m_initialized = false;
     QPointer<QWidget> m_widget;
 };
 
@@ -68,11 +68,11 @@ class SettingsPageProvider : public Core::IOptionsPageProvider
 public:
     SettingsPageProvider(QObject *parent = 0);
 
-    QList<Core::IOptionsPage *> pages() const;
-    bool matches(const QString &searchKeyWord) const;
+    QList<Core::IOptionsPage *> pages() const override;
+    bool matches(const QString &searchKeyWord) const override;
 
 private:
-    mutable bool m_initialized;
+    mutable bool m_initialized = false;
     mutable QStringList m_keywords;
 };
 

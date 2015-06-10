@@ -38,8 +38,8 @@
 #include <extensionsystem/pluginspec.h>
 #include <extensionsystem/pluginmanager.h>
 
-#include <utils/algorithm.h>
 #include <utils/qtcassert.h>
+#include <utils/wizard.h>
 
 #include <QAction>
 
@@ -155,20 +155,21 @@ namespace {
 static QList<IFeatureProvider *> s_providerList;
 QList<IWizardFactory *> s_allFactories;
 QList<IWizardFactory::FactoryCreator> s_factoryCreators;
+QAction *s_inspectWizardAction = 0;
 bool s_areFactoriesLoaded = false;
+bool s_isWizardRunning = false;
 }
 
 /* A utility to find all wizards supporting a view mode and matching a predicate */
-template <class Predicate>
-    QList<IWizardFactory*> findWizardFactories(Predicate predicate)
+QList<IWizardFactory*> findWizardFactories(const std::function<bool(IWizardFactory*)> &predicate)
 {
-    // Filter all wizards
-    const QList<IWizardFactory*> allFactories = IWizardFactory::allWizardFactories();
-    QList<IWizardFactory*> rc;
-    const QList<IWizardFactory*>::const_iterator cend = allFactories.constEnd();
-    for (QList<IWizardFactory*>::const_iterator it = allFactories.constBegin(); it != cend; ++it)
-        if (predicate(*(*it)))
+    const QList<IWizardFactory *> allFactories = IWizardFactory::allWizardFactories();
+    QList<IWizardFactory *> rc;
+    auto cend = allFactories.constEnd();
+    for (auto it = allFactories.constBegin(); it != cend; ++it) {
+        if (predicate(*it))
             rc.push_back(*it);
+    }
     return rc;
 }
 
@@ -204,8 +205,10 @@ QList<IWizardFactory*> IWizardFactory::allWizardFactories()
                 ActionManager::registerAction(newFactory->m_action, actionId(newFactory));
 
                 connect(newFactory->m_action, &QAction::triggered, newFactory, [newFactory]() {
-                    QString path = newFactory->runPath(QString());
-                    newFactory->runWizard(path, ICore::dialogParent(), QString(), QVariantMap());
+                    if (!ICore::isNewItemDialogRunning()) {
+                        QString path = newFactory->runPath(QString());
+                        newFactory->runWizard(path, ICore::dialogParent(), QString(), QVariantMap());
+                    }
                 });
 
                 sanityCheck.insert(newFactory->id(), newFactory);
@@ -218,18 +221,9 @@ QList<IWizardFactory*> IWizardFactory::allWizardFactories()
 }
 
 // Utility to find all registered wizards of a certain kind
-
-class WizardKindPredicate {
-public:
-    WizardKindPredicate(IWizardFactory::WizardKind kind) : m_kind(kind) {}
-    bool operator()(const IWizardFactory &w) const { return w.kind() == m_kind; }
-private:
-    const IWizardFactory::WizardKind m_kind;
-};
-
 QList<IWizardFactory*> IWizardFactory::wizardFactoriesOfKind(WizardKind kind)
 {
-    return findWizardFactories(WizardKindPredicate(kind));
+    return findWizardFactories([kind](IWizardFactory *f) { return f->kind() == kind; });
 }
 
 QString IWizardFactory::runPath(const QString &defaultPath)
@@ -251,6 +245,34 @@ QString IWizardFactory::runPath(const QString &defaultPath)
         }
     }
     return path;
+}
+
+Utils::Wizard *IWizardFactory::runWizard(const QString &path, QWidget *parent, const QString &platform, const QVariantMap &variables)
+{
+    s_isWizardRunning = true;
+    ICore::validateNewDialogIsRunning();
+
+    Utils::Wizard *wizard = runWizardImpl(path, parent, platform, variables);
+
+    if (wizard) {
+        // Connect while wizard exists:
+        connect(m_action, &QAction::triggered, wizard, [wizard]() { ICore::raiseWindow(wizard); });
+        connect(s_inspectWizardAction, &QAction::triggered,
+                wizard, [wizard]() { wizard->showVariables(); });
+        connect(wizard, &Utils::Wizard::finished, [wizard]() {
+            s_isWizardRunning = false;
+            s_inspectWizardAction->setEnabled(false);
+            ICore::validateNewDialogIsRunning();
+            wizard->deleteLater();
+        });
+        s_inspectWizardAction->setEnabled(true);
+        wizard->show();
+        Core::ICore::registerWindow(wizard, Core::Context("Core.NewWizard"));
+    } else {
+        s_isWizardRunning = false;
+        ICore::validateNewDialogIsRunning();
+    }
+    return wizard;
 }
 
 bool IWizardFactory::isAvailable(const QString &platformName) const
@@ -304,6 +326,11 @@ void IWizardFactory::registerFeatureProvider(IFeatureProvider *provider)
     s_providerList.append(provider);
 }
 
+bool IWizardFactory::isWizardRunning()
+{
+    return s_isWizardRunning;
+}
+
 void IWizardFactory::destroyFeatureProvider()
 {
     qDeleteAll(s_providerList);
@@ -338,7 +365,7 @@ FeatureSet IWizardFactory::pluginFeatures() const
 
 FeatureSet IWizardFactory::availableFeatures(const QString &platformName) const
 {
-    FeatureSet availableFeatures = pluginFeatures();
+    FeatureSet availableFeatures;
 
     foreach (const IFeatureProvider *featureManager, s_providerList)
         availableFeatures |= featureManager->availableFeatures(platformName);
@@ -354,4 +381,9 @@ void IWizardFactory::initialize()
     ActionManager::registerAction(resetAction, "Wizard.Factory.Reset");
 
     connect(resetAction, &QAction::triggered, &IWizardFactory::clearWizardFactories);
+    connect(ICore::instance(), &ICore::newItemDialogRunningChanged, resetAction,
+            [resetAction]() { resetAction->setEnabled(!ICore::isNewItemDialogRunning()); });
+
+    s_inspectWizardAction = new QAction(tr("Inspect Wizard State"), ActionManager::instance());
+    ActionManager::registerAction(s_inspectWizardAction, "Wizard.Inspect");
 }

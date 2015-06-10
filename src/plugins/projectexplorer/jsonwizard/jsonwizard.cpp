@@ -127,11 +127,12 @@ QString JsonWizard::stringValue(const QString &n) const
     if (!v.isValid())
         return QString();
 
-    if (v.type() == QVariant::Bool)
-        return v.toBool() ? QString::fromLatin1("true") : QString();
-
-    if (v.type() == QVariant::String)
-        return m_expander.expand(v.toString());
+    if (v.type() == QVariant::String) {
+        QString tmp = m_expander.expand(v.toString());
+        if (tmp.isEmpty())
+            tmp = QString::fromLatin1(""); // Make sure isNull() is *not* true.
+        return tmp;
+    }
 
     if (v.type() == QVariant::StringList)
         return stringListToArrayString(v.toStringList(), &m_expander);
@@ -187,6 +188,16 @@ void JsonWizard::removeAttributeFromAllFiles(Core::GeneratedFile::Attribute a)
         if (m_files.at(i).file.attributes() & a)
             m_files[i].file.setAttributes(m_files.at(i).file.attributes() ^ a);
     }
+}
+
+QHash<QString, QVariant> JsonWizard::variables() const
+{
+    QHash<QString, QVariant> result = Wizard::variables();
+    foreach (const QByteArray &p, dynamicPropertyNames()) {
+        QString key = QString::fromUtf8(p);
+        result.insert(key, value(key));
+    }
+    return result;
 }
 
 void JsonWizard::accept()
@@ -271,6 +282,18 @@ void JsonWizard::handleNewPages(int pageId)
 void JsonWizard::handleError(const QString &message)
 {
     Core::MessageManager::write(message, Core::MessageManager::ModeSwitch);
+}
+
+QString JsonWizard::stringify(const QVariant &v) const
+{
+    if (v.type() == QVariant::StringList)
+        return stringListToArrayString(v.toStringList(), &m_expander);
+    return Wizard::stringify(v);
+}
+
+QString JsonWizard::evaluate(const QVariant &v) const
+{
+    return m_expander.expand(stringify(v));
 }
 
 void JsonWizard::openFiles(const JsonWizard::GeneratorFiles &files)

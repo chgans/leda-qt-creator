@@ -34,6 +34,8 @@
 #include <app/app_version.h>
 #include <extensionsystem/pluginmanager.h>
 
+#include <utils/qtcassert.h>
+
 #include <QSysInfo>
 #include <QApplication>
 
@@ -283,6 +285,8 @@
     specified by \a additionalContexts changed.
 */
 
+#include "dialogs/newdialog.h"
+#include "iwizardfactory.h"
 #include "mainwindow.h"
 #include "documentmanager.h"
 
@@ -309,7 +313,7 @@ ICore *ICore::instance()
 
 bool ICore::isNewItemDialogRunning()
 {
-    return m_mainwindow->isNewItemDialogRunning();
+    return NewDialog::isRunning() || IWizardFactory::isWizardRunning();
 }
 
 ICore::ICore(MainWindow *mainwindow)
@@ -334,7 +338,14 @@ void ICore::showNewItemDialog(const QString &title,
                               const QString &defaultLocation,
                               const QVariantMap &extraVariables)
 {
-    m_mainwindow->showNewItemDialog(title, factories, defaultLocation, extraVariables);
+    QTC_ASSERT(!isNewItemDialogRunning(), return);
+    auto newDialog = new NewDialog(dialogParent());
+    connect(newDialog, &QObject::destroyed, m_instance, &ICore::validateNewDialogIsRunning);
+    newDialog->setWizardFactories(factories, defaultLocation, extraVariables);
+    newDialog->setWindowTitle(title);
+    newDialog->showDialog();
+
+    validateNewDialogIsRunning();
 }
 
 bool ICore::showOptionsDialog(const Id page, QWidget *parent)
@@ -477,7 +488,11 @@ QWidget *ICore::mainWindow()
 QWidget *ICore::dialogParent()
 {
     QWidget *active = QApplication::activeModalWidget();
-    return active ? active : m_mainwindow;
+    if (!active)
+        active = QApplication::activeWindow();
+    if (!active)
+        active = m_mainwindow;
+    return active;
 }
 
 QStatusBar *ICore::statusBar()
@@ -539,6 +554,15 @@ void ICore::saveSettings()
 
     ICore::settings(QSettings::SystemScope)->sync();
     ICore::settings(QSettings::UserScope)->sync();
+}
+
+void ICore::validateNewDialogIsRunning()
+{
+    static bool wasRunning = false;
+    if (wasRunning == isNewItemDialogRunning())
+        return;
+    wasRunning = isNewItemDialogRunning();
+    emit instance()->newItemDialogRunningChanged();
 }
 
 } // namespace Core

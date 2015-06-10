@@ -18,6 +18,11 @@ mac {
     SUBDIRS += iostool
 }
 
+isEmpty(LLVM_INSTALL_DIR):LLVM_INSTALL_DIR=$$(LLVM_INSTALL_DIR)
+exists($$LLVM_INSTALL_DIR) {
+    SUBDIRS += codemodelbackend
+}
+
 BUILD_CPLUSPLUS_TOOLS = $$(BUILD_CPLUSPLUS_TOOLS)
 !isEmpty(BUILD_CPLUSPLUS_TOOLS) {
     SUBDIRS += cplusplus-ast2png \

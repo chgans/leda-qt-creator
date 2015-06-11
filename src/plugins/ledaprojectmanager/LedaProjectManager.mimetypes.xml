@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+
+<mime-info xmlns='http://www.freedesktop.org/standards/shared-mime-info'>
+  <mime-type type="text/x-leda-project">
+    <sub-class-of type="text/plain"/>
+    <comment>Leda Qt Creator Project file</comment>
+    <glob pattern="*.leproj"/>
+  </mime-type>
+
+  <mime-type type="application/vnd.qtcreator.leda.files">
+    <sub-class-of type="text/plain"/>
+    <comment>Leda Project Files</comment>
+    <glob pattern="*.files"/>
+  </mime-type>
+
+  <mime-type type="application/vnd.qtcreator.leda.includes">
+    <sub-class-of type="text/plain"/>
+    <comment>Leda Project Include Paths</comment>
+    <glob pattern="*.includes"/>
+  </mime-type>
+
+  <mime-type type="application/vnd.qtcreator.leda.config">
+    <sub-class-of type="text/plain"/>
+    <comment>Leda Project Configuration File</comment>
+    <glob pattern="*.config"/>
+  </mime-type>
+
+</mime-info>

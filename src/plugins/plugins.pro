@@ -29,6 +29,8 @@ SUBDIRS   = \
     designer \
     resourceeditor \
     genericprojectmanager \
+    leda \
+    ledaprojectmanager \
     qmljseditor \
     qmlprojectmanager \
     glsleditor \

@@ -37,6 +37,7 @@ Project {
         "imageviewer/imageviewer.qbs",
 //        "ios/ios.qbs",
         "leda/leda.qbs",
+        "ledaprojectmanager/ledaprojectmanager.qbs",
 //        "macros/macros.qbs",
 //        "mercurial/mercurial.qbs",
 //        "perforce/perforce.qbs",

@@ -51,7 +51,6 @@ bool LedaEditorPlugin::initialize(const QStringList &arguments, QString *errorMe
     Q_UNUSED(arguments)
     Q_UNUSED(errorMessage)
 
-    Core::ICore *core = Core::ICore::instance();
     Core::EditorManager *editorManager = Core::EditorManager::instance();
     Core::ActionManager *actionManager = Core::ActionManager::instance();
 

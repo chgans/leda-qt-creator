@@ -1,0 +1,13 @@
+{
+    \"Name\" : \"LedaProjectManager\",
+    \"Version\" : \"$$QTCREATOR_VERSION\",
+    \"CompatVersion\" : \"$$QTCREATOR_COMPAT_VERSION\",
+    \"Vendor\" : \"Christian Gagneraud\",
+    \"Copyright\" : \"(C) 2015 Christian Gagneraud\",
+    \"License\" : [ \"GNU Lesser General Public License Usage\"
+    ],
+    \"Category\" : \"Build Systems\",
+    \"Description\" : \"Leda support.\",
+    \"Url\" : \"http://www.libre-eda.org\",
+    $$dependencyList
+}
